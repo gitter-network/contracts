@@ -1,0 +1,40 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'io.neow3j.gradle-plugin' version '3.15.0'
+}
+
+group 'finance.simplex.network'
+version '1.0-SNAPSHOT'
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+    maven { url "https://oss.sonatype.org/content/repositories/snapshots" }
+}
+
+dependencies {
+    implementation 'io.neow3j:devpack:3.16.0-SNAPSHOT'
+    implementation 'io.neow3j:compiler:3.16.0-SNAPSHOT'
+    implementation 'ch.qos.logback:logback-classic:1.2.5'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.8.2', 'io.neow3j:devpack-test:3.16.0-SNAPSHOT'
+}
+
+tasks.withType(Test) {
+    useJUnitPlatform()
+}
+
+test {
+    testLogging.showStandardStreams = true
+}
+
+ext {
+   javaMainClass = "finance.simplex.deployment.CompileAndUpdate"
+}
+
+application {
+    mainClassName = javaMainClass
+}
+

@@ -1,0 +1,12 @@
+.vscode/
+.idea/
+.gradle/
+.classpath
+.project
+.settings
+build/
+bin/
+
+deployment
+invoke-files
+
