@@ -11,25 +11,30 @@ import io.neow3j.devpack.constants.CallFlags;
 import io.neow3j.devpack.constants.FindOptions;
 import io.neow3j.devpack.constants.NativeContract;
 import io.neow3j.devpack.events.Event1Arg;
+import io.neow3j.devpack.events.Event2Args;
 import io.neow3j.devpack.events.Event3Args;
 import io.neow3j.devpack.events.Event4Args;
+import io.neow3j.devpack.events.Event5Args;
 import io.neow3j.devpack.events.Event6Args;
 
 import static io.neow3j.devpack.Storage.getStorageContext;
 
 import io.neow3j.devpack.Hash160;
 import io.neow3j.devpack.Iterator;
-import io.neow3j.devpack.Storage;
+import io.neow3j.devpack.List;
 
 import static io.neow3j.devpack.Helper.toByteArray;
+import static io.neow3j.devpack.Helper.last;
 import static io.neow3j.devpack.Runtime.getTime;
 import static io.neow3j.devpack.Runtime.getScriptContainer;
 import static io.neow3j.devpack.Runtime.checkWitness;
+import static io.neow3j.devpack.Runtime.getCallingScriptHash;
 import static io.neow3j.devpack.contracts.StdLib.serialize;
 import static io.neow3j.devpack.contracts.StdLib.deserialize;
 import static io.neow3j.devpack.contracts.CryptoLib.sha256;
 import static io.neow3j.devpack.Storage.put;
 import static io.neow3j.devpack.Storage.get;
+import static io.neow3j.devpack.Storage.getIntOrZero;
 
 import io.neow3j.devpack.ByteString;
 import io.neow3j.devpack.Contract;
@@ -40,13 +45,16 @@ import io.neow3j.devpack.Contract;
 public class WizloRunner {
 
     @DisplayName("JobCreated")
-    private static Event4Args<Hash160, String, Object[], Hash160> onJobCreated;
+    private static Event5Args<ByteString, Hash160, String, Object[], Hash160> onJobCreated;
 
     @DisplayName("TimerSet")
     private static Event3Args<ByteString, Integer, Integer> onTimerSet;
 
     @DisplayName("ExecSuccess")
     private static Event6Args<Hash160, Hash160, String, Byte, Object[], Hash160> onExecution;
+
+    @DisplayName("JobCancelled")
+    private static Event2Args<ByteString, Hash160> onJobCancelled;
 
     @DisplayName("Debug")
     private static Event1Arg<Object> onDebug;
@@ -56,21 +64,15 @@ public class WizloRunner {
 
     /* STORAGE MAPS */
     private static final StorageMap jobs = new StorageMap(ctx, toByteArray((byte) 2));
-    private static final StorageMap timedJobs = new StorageMap(ctx, toByteArray((byte) 2));
-    private static final StorageMap execAddresses = new StorageMap(ctx, toByteArray((byte) 3));
-    private static final StorageMap executors = new StorageMap(ctx, toByteArray((byte) 4));
-    // isPausedMap
+    private static final StorageMap timedJobs = new StorageMap(ctx, toByteArray((byte) 3));
+    private static final StorageMap execAddresses = new StorageMap(ctx, toByteArray((byte) 4));
 
     /* STORAGE KEYS */
-    private static final byte[] contractOwnerKey = toByteArray((byte) 4);
-    private static final byte[] treasuryKey = toByteArray((byte) 5);
+    private static final byte[] contractOwnerKey = toByteArray((byte) 5);
+    private static final byte[] treasuryKey = toByteArray((byte) 6);
+    private static final byte[] feeKey = toByteArray((byte) 7);
 
     /* READ ONLY */
-
-    @Safe
-    public static Iterator<ByteString> jobsOf(Hash160 account) {
-        return new StorageMap(ctx, account.toByteArray()).find(FindOptions.KeysOnly);
-    }
 
     @Safe
     public static Hash160 contractOwner() {
@@ -80,6 +82,23 @@ public class WizloRunner {
     @Safe
     public static Hash160 treasury() {
         return new Hash160(get(ctx, treasuryKey));
+    }
+
+    @Safe
+    public static int fee() {
+        return getIntOrZero(ctx, feeKey);
+    }
+
+    @Safe
+    public static List<ByteString> jobsOf(Hash160 creator) {
+        List<ByteString> jobs = new List<>();
+        Iterator<ByteString> iterator = new StorageMap(ctx, creator.toByteArray()).find(FindOptions.KeysOnly);
+        while (iterator.next()) {
+            ByteString result = iterator.get();
+            ByteString jobId = result.last(result.length() - creator.toByteArray().length);
+            jobs.add(jobId);
+        }
+        return jobs;
     }
 
     static class Job {
@@ -132,7 +151,7 @@ public class WizloRunner {
         jobs.put(job, creator);
         execAddresses.put(job, contract);
         new StorageMap(ctx, creator.toByteArray()).put(job, 1);
-        onJobCreated.fire(contract, method, args, creator);
+        onJobCreated.fire(job, contract, method, args, creator);
         return job;
     }
 
@@ -144,13 +163,12 @@ public class WizloRunner {
             byte callFlag,
             Hash160 executor) {
         assert (treasury() != null) : "noTreasurySet";
-        int feeToPay = getTxFeeWithTax();
+        int feeToPay = getTxCostsWithFee();
         boolean enoughBalance = getTreasuryBalanceOf(creator) >= feeToPay;
         assert (enoughBalance) : "creatorDoesNotHaveEnoughBalance";
-        // onlyJobExecutor(executor);
         ByteString job = getJobId(contract, method, creator, args);
+        onDebug.fire(job);
         assert (jobs.get(job) != null) : "noSuchJobFound";
-
         updateTimer(job);
 
         Contract.call(contract, method, callFlag, args);
@@ -159,11 +177,23 @@ public class WizloRunner {
         onExecution.fire(contract, executor, method, callFlag, args, creator);
     }
 
+    public static void cancelJob(ByteString jobId) {
+        ByteString result = jobs.get(jobId);
+        assert (result != null) : "noJobFoundToCancel";
+        Hash160 creator = new Hash160(result);
+        assert (checkWitness(creator)) : "noAuthToCancelJob";
+        execAddresses.delete(jobId);
+        jobs.delete(jobId);
+        new StorageMap(ctx, creator.toByteArray()).delete(jobId);
+        timedJobs.delete(jobId);
+        onJobCancelled.fire(jobId, creator);
+    }
+
     public static void setTreasury(Hash160 treasury) {
         onlyOwner();
         boolean isTreasury = (boolean) Contract.call(treasury, "isTreasury", CallFlags.All, new Object[0]);
         assert (isTreasury) : "noTreasury";
-        Storage.put(ctx, treasuryKey, treasury);
+        put(ctx, treasuryKey, treasury);
     }
 
     private static void updateTimer(ByteString job) {
@@ -184,13 +214,13 @@ public class WizloRunner {
         }
     }
 
-    private static int getTxFee() {
+    private static int getTxCosts() {
         Transaction tx = (Transaction) getScriptContainer();
         return tx.networkFee + tx.systemFee;
     }
 
-    private static int getTxFeeWithTax() {
-        return getTxFee() + 200000;
+    private static int getTxCostsWithFee() {
+        return getTxCosts() + fee();
     }
 
     private static ByteString getJobId(
@@ -200,13 +230,6 @@ public class WizloRunner {
             Object[] args) {
         return sha256(serialize(new Job(contract, method, creator, args)));
     }
-
-    /*
-     * private static void onlyJobExecutor() {
-     * Hash160 jobExecutor = new Hash160(get(ctx, jobExecutorKey));
-     * assert (checkWitness(jobExecutor)) : "onlyJobExecutor";
-     * }
-     */
 
     private static Timer getTimer(ByteString job) {
         ByteString result = timedJobs.get(job);
@@ -230,7 +253,9 @@ public class WizloRunner {
         if (!update) {
             Object[] arr = (Object[]) data;
             Hash160 contractOwner = (Hash160) arr[0];
+            int fee = (int) arr[1];
             put(ctx, contractOwnerKey, contractOwner);
+            put(ctx, feeKey, fee);
         }
     }
 

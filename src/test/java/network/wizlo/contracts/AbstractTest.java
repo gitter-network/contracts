@@ -1,5 +1,6 @@
 package network.wizlo.contracts;
 
+import java.math.BigInteger;
 import java.util.Arrays;
 
 import com.github.dockerjava.zerodep.shaded.org.apache.hc.core5.annotation.Contract;
@@ -65,7 +66,8 @@ public abstract class AbstractTest {
         DeployConfiguration config = new DeployConfiguration();
 
         ContractParameter deployParams = ContractParameter
-                .array(ContractParameter.hash160(ext.getAccount("NQcSTBwSJs7hcFUZzku2QdPNLe2dkTGok2").getScriptHash()));
+                .array(ContractParameter.hash160(ext.getAccount("NQcSTBwSJs7hcFUZzku2QdPNLe2dkTGok2").getScriptHash()),
+                        ContractParameter.integer(BigInteger.valueOf(1000000)));
         config.setDeployParam(deployParams);
         return config;
     }

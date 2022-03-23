@@ -33,7 +33,7 @@ public class TestHelper {
         Transaction tx = token.transfer(
                 from, to, amount, data).sign();
         NeoSendRawTransaction res = tx.send();
-        log.info("gas fee transfer17: {}\n", tx.getSystemFee() + tx.getNetworkFee());
+        log.info("\n\ngas fee transfer17: {}\n", tx.getSystemFee() + tx.getNetworkFee());
         if (res.hasError()) {
             throw new Exception(res.getError().getMessage());
         }
@@ -48,8 +48,9 @@ public class TestHelper {
 
         tx = contract.invokeFunction(method, paramsList.toArray(new ContractParameter[0]))
                 .signers(new Signer[] { AccountSigner.calledByEntry(signer) }).sign();
+        log.info("\n\n==================== {} ====================", method);
 
-        log.info("GAS FEE for {}: {}", method, tx.getSystemFee() + tx.getNetworkFee());
+        log.info("GAS FEE: {}", tx.getSystemFee() + tx.getNetworkFee());
         NeoSendRawTransaction res = tx.send();
         if (res.hasError()) {
             log.info("error on tx.send {} : {}\n", method, res.getError().getMessage());

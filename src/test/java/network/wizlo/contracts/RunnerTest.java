@@ -32,7 +32,7 @@ public class RunnerTest extends AbstractTest {
                                 alice.getScriptHash(), alice);
 
                 InvocationResult jobsOfResult = runner.jobsOf(alice.getScriptHash());
-                assertEquals(1, jobsOfResult.getStack().get(0).getIterator().size());
+                assertEquals(1, jobsOfResult.getStack().get(0).getList().size());
         }
 
         @Test
@@ -100,7 +100,20 @@ public class RunnerTest extends AbstractTest {
                                                 alice.getScriptHash(),
                                                 new byte[] { CallFlags.ALL.getValue() }, bob.getScriptHash(), alice));
                 assertTrue(ex.getMessage().contains("tooEarly"));
+        }
 
+        @Test
+        @Order(7)
+        public void successfullyCancelJobTest() throws Throwable {
+                byte[] job = runner.jobsOf(alice.getScriptHash()).getStack().get(0).getList().get(0).getByteArray();
+                assertDoesNotThrow(() -> runner.cancelJob(job, alice));
+        }
+
+        @Test
+        public void noJobFoundToCancelTest() throws Throwable {
+                Exception ex = assertThrows(Exception.class,
+                                () -> runner.cancelJob(new byte[] { (byte) 2 }, alice));
+                assertTrue(ex.getMessage().contains("noJobFoundToCancel"));
         }
 
 }
