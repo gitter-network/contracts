@@ -9,11 +9,9 @@ import io.neow3j.devpack.annotations.Permission;
 import io.neow3j.devpack.annotations.Safe;
 import io.neow3j.devpack.constants.CallFlags;
 import io.neow3j.devpack.constants.FindOptions;
-import io.neow3j.devpack.constants.NativeContract;
 import io.neow3j.devpack.events.Event1Arg;
 import io.neow3j.devpack.events.Event2Args;
 import io.neow3j.devpack.events.Event3Args;
-import io.neow3j.devpack.events.Event4Args;
 import io.neow3j.devpack.events.Event5Args;
 import io.neow3j.devpack.events.Event6Args;
 
@@ -39,7 +37,6 @@ import io.neow3j.devpack.Contract;
 
 @SuppressWarnings("unchecked")
 @Permission(contract = "*", methods = "*")
-@Permission(nativeContract = NativeContract.ContractManagement)
 public class GitterCore {
 
     @DisplayName("JobCreated")

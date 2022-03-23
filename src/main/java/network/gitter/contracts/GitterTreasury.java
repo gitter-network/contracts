@@ -7,6 +7,7 @@ import io.neow3j.devpack.annotations.OnDeployment;
 import io.neow3j.devpack.annotations.OnNEP17Payment;
 import io.neow3j.devpack.annotations.Permission;
 import io.neow3j.devpack.annotations.Safe;
+import io.neow3j.devpack.annotations.Permission.Permissions;
 import io.neow3j.devpack.constants.NativeContract;
 import io.neow3j.devpack.contracts.GasToken;
 import io.neow3j.devpack.events.Event3Args;
@@ -15,6 +16,7 @@ import io.neow3j.devpack.events.Event4Args;
 import static io.neow3j.devpack.Storage.getStorageContext;
 import static io.neow3j.devpack.Storage.put;
 
+import io.neow3j.devpack.ByteString;
 import io.neow3j.devpack.Hash160;
 import io.neow3j.devpack.Storage;
 
@@ -23,8 +25,8 @@ import static io.neow3j.devpack.Runtime.getCallingScriptHash;
 import static io.neow3j.devpack.Runtime.getExecutingScriptHash;
 import static io.neow3j.devpack.Runtime.checkWitness;
 
-@Permission(contract = "*", methods = "*")
-@Permission(nativeContract = NativeContract.ContractManagement)
+@Permission(nativeContract = NativeContract.ContractManagement, methods = "update")
+@Permission(nativeContract = NativeContract.GasToken, methods = "transfer")
 public class GitterTreasury {
 
     @DisplayName("Payment")
@@ -39,7 +41,7 @@ public class GitterTreasury {
     private static final StorageMap gasAssets = new StorageMap(ctx, toByteArray((byte) 1));
 
     /* STORAGE KEYS */
-    private static final byte[] contractOwnerKey = toByteArray((byte) 2);
+    private static final byte[] ownerKey = toByteArray((byte) 2);
     private static final byte[] coreKey = toByteArray((byte) 3);
 
     @Safe
@@ -83,14 +85,27 @@ public class GitterTreasury {
         assert (checkWitness(core)) : "onlyGitterCore";
     }
 
+    private static void onlyOwner() {
+        Hash160 owner = new Hash160(Storage.get(ctx, ownerKey));
+        assert (checkWitness(owner)) : "onlyOwner";
+    }
+
     @OnDeployment
     public static void deploy(Object data, boolean update) {
         if (!update) {
             Object[] arr = (Object[]) data;
             Hash160 contractOwner = (Hash160) arr[0];
+            assert (contractOwner != null) : "ownerMustNotBeNull";
             Hash160 core = (Hash160) arr[1];
-            put(ctx, contractOwnerKey, contractOwner);
+            assert (core != null) : "coreMustNotBeNull";
+            put(ctx, ownerKey, contractOwner);
             put(ctx, coreKey, core);
         }
+    }
+
+    public static void update(ByteString script, String manifest) throws Exception {
+        onlyOwner();
+        assert (script.length() != 0 || manifest.length() != 0) : "scriptOrManifestMissing";
+        update(script, manifest);
     }
 }
