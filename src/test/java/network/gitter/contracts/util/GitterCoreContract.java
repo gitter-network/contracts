@@ -1,4 +1,4 @@
-package network.wizlo.contracts.util;
+package network.gitter.contracts.util;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -12,16 +12,16 @@ import io.neow3j.protocol.core.response.NeoApplicationLog.Execution;
 import io.neow3j.types.ContractParameter;
 import io.neow3j.types.Hash160;
 import io.neow3j.wallet.Account;
-import network.wizlo.contracts.TestHelper;
+import network.gitter.contracts.TestHelper;
 
-public class WizloRunnerContract extends SmartContract {
+public class GitterCoreContract extends SmartContract {
 
     private static final String CREATE_TIMED_JOB = "createTimedJob";
     private static final String EXECUTE_JOB = "executeJob";
     private static final String CANCEL_JOB = "cancelJob";
     private static final String jobsOf = "jobsOf";
 
-    public WizloRunnerContract(Hash160 scriptHash, Neow3j neow3j) {
+    public GitterCoreContract(Hash160 scriptHash, Neow3j neow3j) {
         super(scriptHash, neow3j);
     }
 

@@ -1,4 +1,4 @@
-package network.wizlo.contracts;
+package network.gitter.contracts;
 
 import io.neow3j.devpack.StorageContext;
 import io.neow3j.devpack.StorageMap;
@@ -25,7 +25,7 @@ import static io.neow3j.devpack.Runtime.checkWitness;
 
 @Permission(contract = "*", methods = "*")
 @Permission(nativeContract = NativeContract.ContractManagement)
-public class WizloTreasury {
+public class GitterTreasury {
 
     @DisplayName("Payment")
     private static Event3Args<Hash160, Integer, Object> onPayment;
@@ -40,7 +40,7 @@ public class WizloTreasury {
 
     /* STORAGE KEYS */
     private static final byte[] contractOwnerKey = toByteArray((byte) 2);
-    private static final byte[] runnerKey = toByteArray((byte) 3);
+    private static final byte[] coreKey = toByteArray((byte) 3);
 
     @Safe
     public static int getBalance(Hash160 from) {
@@ -60,7 +60,7 @@ public class WizloTreasury {
     }
 
     public static void transfer(Hash160 from, Hash160 to, int amount) {
-        onlyRunner();
+        onlyCore();
         int newBalance = deductFromBalance(from, amount);
         GasToken.transfer(getExecutingScriptHash(), to, amount, null);
         onTreasuryTransfer.fire(from, to, amount, newBalance);
@@ -78,9 +78,9 @@ public class WizloTreasury {
         return newBalance;
     }
 
-    private static void onlyRunner() {
-        Hash160 runner = new Hash160(Storage.get(ctx, runnerKey));
-        assert (checkWitness(runner)) : "onlyRunner";
+    private static void onlyCore() {
+        Hash160 core = new Hash160(Storage.get(ctx, coreKey));
+        assert (checkWitness(core)) : "onlyGitterCore";
     }
 
     @OnDeployment
@@ -88,9 +88,9 @@ public class WizloTreasury {
         if (!update) {
             Object[] arr = (Object[]) data;
             Hash160 contractOwner = (Hash160) arr[0];
-            Hash160 runner = (Hash160) arr[1];
+            Hash160 core = (Hash160) arr[1];
             put(ctx, contractOwnerKey, contractOwner);
-            put(ctx, runnerKey, runner);
+            put(ctx, coreKey, core);
         }
     }
 }

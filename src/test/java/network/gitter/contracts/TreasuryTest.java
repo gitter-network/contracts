@@ -1,4 +1,4 @@
-package network.wizlo.contracts;
+package network.gitter.contracts;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -12,7 +12,7 @@ import io.neow3j.test.ContractTest;
 import io.neow3j.types.ContractParameter;
 
 @ContractTest(blockTime = 1, contracts = {
-                WizloTreasury.class }, batchFile = "init.batch", configFile = "dev.neo-express")
+                GitterTreasury.class }, batchFile = "init.batch", configFile = "dev.neo-express")
 public class TreasuryTest extends AbstractTest {
 
         private static final String GET_BALANCE = "getBalance";

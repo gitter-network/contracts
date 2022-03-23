@@ -1,4 +1,4 @@
-package network.wizlo.contracts.examples;
+package network.gitter.contracts.examples;
 
 import io.neow3j.devpack.StorageContext;
 import io.neow3j.devpack.annotations.Safe;

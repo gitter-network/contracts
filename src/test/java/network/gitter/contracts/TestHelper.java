@@ -1,4 +1,4 @@
-package network.wizlo.contracts;
+package network.gitter.contracts;
 
 import java.math.BigInteger;
 import java.util.List;

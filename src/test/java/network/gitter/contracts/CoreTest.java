@@ -1,4 +1,4 @@
-package network.wizlo.contracts;
+package network.gitter.contracts;
 
 import static org.junit.Assert.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -16,22 +16,22 @@ import io.neow3j.protocol.core.response.InvocationResult;
 import io.neow3j.test.ContractTest;
 import io.neow3j.types.CallFlags;
 import io.neow3j.types.ContractParameter;
-import network.wizlo.contracts.examples.CounterExample;
+import network.gitter.contracts.examples.CounterExample;
 
-@ContractTest(blockTime = 1, contracts = { CounterExample.class, WizloRunner.class,
-                WizloTreasury.class }, batchFile = "init.batch", configFile = "dev.neo-express")
+@ContractTest(blockTime = 1, contracts = { CounterExample.class, GitterCore.class,
+                GitterTreasury.class }, batchFile = "init.batch", configFile = "dev.neo-express")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-public class RunnerTest extends AbstractTest {
+public class CoreTest extends AbstractTest {
 
         private static final String EXAMPLE_JOB_METHOD = "addCount";
 
         @Test
         @Order(1)
         public void createTimedJobTest() throws Throwable {
-                runner.createTimedJob(1, 1, counterExample.getScriptHash(), EXAMPLE_JOB_METHOD, new Object[] { 1 },
+                core.createTimedJob(1, 1, counterExample.getScriptHash(), EXAMPLE_JOB_METHOD, new Object[] { 1 },
                                 alice.getScriptHash(), alice);
 
-                InvocationResult jobsOfResult = runner.jobsOf(alice.getScriptHash());
+                InvocationResult jobsOfResult = core.jobsOf(alice.getScriptHash());
                 assertEquals(1, jobsOfResult.getStack().get(0).getList().size());
         }
 
@@ -39,7 +39,7 @@ public class RunnerTest extends AbstractTest {
         @Order(2)
         public void executeJobNotEnoughBalanceTest() throws Throwable {
                 Exception ex = assertThrows(Exception.class,
-                                () -> runner.executeJob(counterExample.getScriptHash(), EXAMPLE_JOB_METHOD,
+                                () -> core.executeJob(counterExample.getScriptHash(), EXAMPLE_JOB_METHOD,
                                                 new Object[] { 1 },
                                                 alice.getScriptHash(),
                                                 new byte[] { CallFlags.ALL.getValue() }, bob.getScriptHash(), alice));
@@ -54,7 +54,7 @@ public class RunnerTest extends AbstractTest {
                                 ContractParameter.any(null),
                                 neow3j);
                 Exception ex = assertThrows(Exception.class,
-                                () -> runner.executeJob(counterExample.getScriptHash(), EXAMPLE_JOB_METHOD,
+                                () -> core.executeJob(counterExample.getScriptHash(), EXAMPLE_JOB_METHOD,
                                                 new Object[] { 2 },
                                                 alice.getScriptHash(),
                                                 new byte[] { CallFlags.ALL.getValue() }, bob.getScriptHash(), alice));
@@ -67,7 +67,7 @@ public class RunnerTest extends AbstractTest {
         public void createTimedJobAlreadyExistsForCreator() {
 
                 Exception ex = assertThrows(Exception.class,
-                                () -> runner.createTimedJob(1, 1, counterExample.getScriptHash(), EXAMPLE_JOB_METHOD,
+                                () -> core.createTimedJob(1, 1, counterExample.getScriptHash(), EXAMPLE_JOB_METHOD,
                                                 new Object[] { 1 },
                                                 alice.getScriptHash(), alice));
                 assertTrue(ex.getMessage().contains("jobAlreadyExistsForCreator"));
@@ -79,7 +79,7 @@ public class RunnerTest extends AbstractTest {
         public void executeJobSuccess() throws Throwable {
 
                 assertDoesNotThrow(
-                                () -> runner.executeJob(counterExample.getScriptHash(), EXAMPLE_JOB_METHOD,
+                                () -> core.executeJob(counterExample.getScriptHash(), EXAMPLE_JOB_METHOD,
                                                 new Object[] { 1 },
                                                 alice.getScriptHash(),
                                                 new byte[] { CallFlags.ALL.getValue() }, bob.getScriptHash(), alice));
@@ -95,7 +95,7 @@ public class RunnerTest extends AbstractTest {
         public void executeJobTooEarlyTest() throws Throwable {
 
                 Exception ex = assertThrows(Exception.class,
-                                () -> runner.executeJob(counterExample.getScriptHash(), EXAMPLE_JOB_METHOD,
+                                () -> core.executeJob(counterExample.getScriptHash(), EXAMPLE_JOB_METHOD,
                                                 new Object[] { 1 },
                                                 alice.getScriptHash(),
                                                 new byte[] { CallFlags.ALL.getValue() }, bob.getScriptHash(), alice));
@@ -105,14 +105,14 @@ public class RunnerTest extends AbstractTest {
         @Test
         @Order(7)
         public void successfullyCancelJobTest() throws Throwable {
-                byte[] job = runner.jobsOf(alice.getScriptHash()).getStack().get(0).getList().get(0).getByteArray();
-                assertDoesNotThrow(() -> runner.cancelJob(job, alice));
+                byte[] job = core.jobsOf(alice.getScriptHash()).getStack().get(0).getList().get(0).getByteArray();
+                assertDoesNotThrow(() -> core.cancelJob(job, alice));
         }
 
         @Test
         public void noJobFoundToCancelTest() throws Throwable {
                 Exception ex = assertThrows(Exception.class,
-                                () -> runner.cancelJob(new byte[] { (byte) 2 }, alice));
+                                () -> core.cancelJob(new byte[] { (byte) 2 }, alice));
                 assertTrue(ex.getMessage().contains("noJobFoundToCancel"));
         }
 

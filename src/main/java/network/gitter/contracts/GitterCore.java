@@ -1,4 +1,4 @@
-package network.wizlo.contracts;
+package network.gitter.contracts;
 
 import io.neow3j.devpack.StorageContext;
 import io.neow3j.devpack.StorageMap;
@@ -24,11 +24,9 @@ import io.neow3j.devpack.Iterator;
 import io.neow3j.devpack.List;
 
 import static io.neow3j.devpack.Helper.toByteArray;
-import static io.neow3j.devpack.Helper.last;
 import static io.neow3j.devpack.Runtime.getTime;
 import static io.neow3j.devpack.Runtime.getScriptContainer;
 import static io.neow3j.devpack.Runtime.checkWitness;
-import static io.neow3j.devpack.Runtime.getCallingScriptHash;
 import static io.neow3j.devpack.contracts.StdLib.serialize;
 import static io.neow3j.devpack.contracts.StdLib.deserialize;
 import static io.neow3j.devpack.contracts.CryptoLib.sha256;
@@ -42,7 +40,7 @@ import io.neow3j.devpack.Contract;
 @SuppressWarnings("unchecked")
 @Permission(contract = "*", methods = "*")
 @Permission(nativeContract = NativeContract.ContractManagement)
-public class WizloRunner {
+public class GitterCore {
 
     @DisplayName("JobCreated")
     private static Event5Args<ByteString, Hash160, String, Object[], Hash160> onJobCreated;
