@@ -3,11 +3,11 @@ package network.gitter.contracts;
 import io.neow3j.devpack.StorageContext;
 import io.neow3j.devpack.StorageMap;
 import io.neow3j.devpack.annotations.DisplayName;
+import io.neow3j.devpack.annotations.ManifestExtra;
 import io.neow3j.devpack.annotations.OnDeployment;
 import io.neow3j.devpack.annotations.OnNEP17Payment;
 import io.neow3j.devpack.annotations.Permission;
 import io.neow3j.devpack.annotations.Safe;
-import io.neow3j.devpack.annotations.Permission.Permissions;
 import io.neow3j.devpack.constants.NativeContract;
 import io.neow3j.devpack.contracts.GasToken;
 import io.neow3j.devpack.events.Event3Args;
@@ -25,9 +25,10 @@ import static io.neow3j.devpack.Runtime.getCallingScriptHash;
 import static io.neow3j.devpack.Runtime.getExecutingScriptHash;
 import static io.neow3j.devpack.Runtime.checkWitness;
 
+@ManifestExtra(key = "name", value = "Gitter Treasury")
 @Permission(nativeContract = NativeContract.ContractManagement, methods = "update")
 @Permission(nativeContract = NativeContract.GasToken, methods = "transfer")
-public class GitterTreasury {
+public class GitterTreasuryV3 {
 
     @DisplayName("Payment")
     private static Event3Args<Hash160, Integer, Object> onPayment;

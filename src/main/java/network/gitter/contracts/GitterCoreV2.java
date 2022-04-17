@@ -3,23 +3,28 @@ package network.gitter.contracts;
 import io.neow3j.devpack.StorageContext;
 import io.neow3j.devpack.StorageMap;
 import io.neow3j.devpack.Transaction;
+import io.neow3j.devpack.Iterator.Struct;
 import io.neow3j.devpack.annotations.DisplayName;
 import io.neow3j.devpack.annotations.OnDeployment;
 import io.neow3j.devpack.annotations.Permission;
 import io.neow3j.devpack.annotations.Safe;
 import io.neow3j.devpack.constants.CallFlags;
 import io.neow3j.devpack.constants.FindOptions;
+import io.neow3j.devpack.contracts.ContractManagement;
 import io.neow3j.devpack.events.Event1Arg;
 import io.neow3j.devpack.events.Event2Args;
 import io.neow3j.devpack.events.Event3Args;
 import io.neow3j.devpack.events.Event5Args;
-import io.neow3j.devpack.events.Event6Args;
+import network.gitter.Job;
+import network.gitter.JobVM;
+import network.gitter.Timer;
 
 import static io.neow3j.devpack.Storage.getStorageContext;
 
 import io.neow3j.devpack.Hash160;
 import io.neow3j.devpack.Iterator;
 import io.neow3j.devpack.List;
+import io.neow3j.devpack.Map;
 
 import static io.neow3j.devpack.Helper.toByteArray;
 import static io.neow3j.devpack.Runtime.getTime;
@@ -37,7 +42,7 @@ import io.neow3j.devpack.Contract;
 
 @SuppressWarnings("unchecked")
 @Permission(contract = "*", methods = "*")
-public class GitterCore {
+public class GitterCoreV2 {
 
     @DisplayName("JobCreated")
     private static Event5Args<ByteString, Hash160, String, Object[], Hash160> onJobCreated;
@@ -46,7 +51,7 @@ public class GitterCore {
     private static Event3Args<ByteString, Integer, Integer> onTimerSet;
 
     @DisplayName("ExecSuccess")
-    private static Event6Args<Hash160, Hash160, String, Byte, Object[], Hash160> onExecution;
+    private static Event5Args<Hash160, Hash160, String, Object[], Hash160> onExecution;
 
     @DisplayName("JobCancelled")
     private static Event2Args<ByteString, Hash160> onJobCancelled;
@@ -60,11 +65,13 @@ public class GitterCore {
     /* STORAGE MAPS */
     private static final StorageMap jobs = new StorageMap(ctx, toByteArray((byte) 2));
     private static final StorageMap timedJobs = new StorageMap(ctx, toByteArray((byte) 3));
+    private static final StorageMap paidFees = new StorageMap(ctx, toByteArray((byte) 4));
+    private static final StorageMap names = new StorageMap(ctx, toByteArray((byte) 5));
 
     /* STORAGE KEYS */
-    private static final byte[] contractOwnerKey = toByteArray((byte) 5);
-    private static final byte[] treasuryKey = toByteArray((byte) 6);
-    private static final byte[] feeKey = toByteArray((byte) 7);
+    private static final byte[] contractOwnerKey = toByteArray((byte) 6);
+    private static final byte[] treasuryKey = toByteArray((byte) 7);
+    private static final byte[] feeKey = toByteArray((byte) 8);
 
     /* READ ONLY */
 
@@ -84,39 +91,31 @@ public class GitterCore {
     }
 
     @Safe
-    public static List<ByteString> jobsOf(Hash160 creator) {
-        List<ByteString> jobs = new List<>();
-        Iterator<ByteString> iterator = new StorageMap(ctx, creator.toByteArray()).find(FindOptions.KeysOnly);
+    public static List<Map<ByteString, JobVM>> jobsOf(Hash160 creator) {
+        List<Map<ByteString, JobVM>> jobs = new List<>();
+        Iterator<Struct<ByteString, ByteString>> iterator = new StorageMap(ctx, creator.toByteArray())
+                .find(FindOptions.RemovePrefix);
         while (iterator.next()) {
-            ByteString result = iterator.get();
-            ByteString jobId = result.last(result.length() - creator.toByteArray().length);
-            jobs.add(jobId);
+            Struct<ByteString, ByteString> result = iterator.get();
+            Job job = (Job) deserialize(result.value);
+            ByteString jobId = getJobId(job);
+            JobVM jobVM = new JobVM(job.contract, job.method, job.creator, job.args, getNameForJob(jobId),
+                    getPaidFeesForJob(jobId));
+            Map<ByteString, JobVM> map = new Map<>();
+            map.put(result.key, jobVM);
+            jobs.add(map);
         }
         return jobs;
     }
 
-    static class Job {
-        Hash160 contract;
-        String method;
-        Hash160 creator;
-        Object[] args;
-
-        Job(Hash160 contract, String method, Hash160 creator, Object[] args) {
-            this.contract = contract;
-            this.method = method;
-            this.creator = creator;
-            this.args = args;
-        }
+    @Safe
+    public static int getPaidFeesForJob(ByteString job) {
+        return paidFees.getIntOrZero(job);
     }
 
-    static class Timer {
-        int nextExec;
-        int interval;
-
-        Timer(int nextExec, int interval) {
-            this.interval = interval;
-            this.nextExec = nextExec;
-        }
+    @Safe
+    public static String getNameForJob(ByteString job) {
+        return names.getString(job);
     }
 
     public static void createTimedJob(
@@ -125,28 +124,51 @@ public class GitterCore {
             Hash160 contract,
             String method,
             Object[] args,
-            Hash160 creator) {
+            Hash160 creator,
+            String name) {
         assert (treasury() != null) : "noTreasurySet";
         assert (checkWitness(creator)) : "noAuth";
-        ByteString job = createJob(contract, method, args, creator);
+        ByteString job = createJob(contract, method, args, creator, name);
         interval *= MS_PER_MINUTE;
         int nextExec = startTime > getTime() ? startTime : getTime();
         timedJobs.put(job, serialize(new Timer(nextExec, interval)));
         onTimerSet.fire(job, nextExec, interval);
     }
 
-    private static ByteString createJob(
+    public static ByteString createJob(
             Hash160 contract,
             String method,
             Object[] args,
-            Hash160 creator) {
+            Hash160 creator,
+            String name) {
         Job job = new Job(contract, method, creator, args);
         ByteString jobId = getJobId(job);
         assert (jobs.get(jobId) == null) : "jobAlreadyExistsForCreator";
         jobs.put(jobId, creator);
+        names.put(jobId, name);
         new StorageMap(ctx, creator.toByteArray()).put(jobId, serialize(job));
         onJobCreated.fire(jobId, contract, method, args, creator);
         return jobId;
+    }
+
+    public static void executeJob(
+            ByteString jobId,
+            Hash160 executor) {
+        assert (treasury() != null) : "noTreasurySet";
+        Job job = (Job) deserialize(jobs.get(jobId));
+        assert (jobs.get(jobId) != null) : "noSuchJobFound";
+
+        int feeToPay = getTxCostsWithFee();
+        boolean enoughBalance = getTreasuryBalanceOf(job.creator) >= feeToPay;
+        assert (enoughBalance) : "creatorDoesNotHaveEnoughBalance";
+        updateTimer(jobId);
+
+        Contract.call(job.contract, job.method, CallFlags.All, job.args);
+
+        new StorageMap(ctx, jobId).put(getTime(), feeToPay);
+        payExecutionFee(job.creator, executor, feeToPay);
+        increasePaidFeeForJob(jobId, feeToPay);
+        onExecution.fire(job.contract, executor, job.method, job.args, job.creator);
     }
 
     public static void executeJob(
@@ -154,7 +176,6 @@ public class GitterCore {
             String method,
             Object[] args,
             Hash160 creator,
-            byte callFlag,
             Hash160 executor) {
         assert (treasury() != null) : "noTreasurySet";
         int feeToPay = getTxCostsWithFee();
@@ -165,11 +186,12 @@ public class GitterCore {
         assert (jobs.get(job) != null) : "noSuchJobFound";
         updateTimer(job);
 
-        Contract.call(contract, method, callFlag, args);
+        Contract.call(contract, method, CallFlags.All, args);
 
         new StorageMap(ctx, job).put(getTime(), feeToPay);
         payExecutionFee(creator, executor, feeToPay);
-        onExecution.fire(contract, executor, method, callFlag, args, creator);
+        increasePaidFeeForJob(job, feeToPay);
+        onExecution.fire(contract, executor, method, args, creator);
     }
 
     public static void cancelJob(ByteString jobId) {
@@ -206,6 +228,11 @@ public class GitterCore {
             timer.nextExec = nextExec;
             timedJobs.put(job, serialize(timer));
         }
+    }
+
+    private static void increasePaidFeeForJob(ByteString job, int fee) {
+        int current = paidFees.getIntOrZero(job);
+        paidFees.put(job, current + fee);
     }
 
     private static int getTxCosts() {
@@ -251,10 +278,10 @@ public class GitterCore {
         }
     }
 
-    public static void update(ByteString script, String manifest) throws Exception {
+    public static void update(ByteString script, String manifest) {
         onlyOwner();
         assert (script.length() != 0 || manifest.length() != 0) : "scriptOrManifestMissing";
-        update(script, manifest);
+        ContractManagement.update(script, manifest);
     }
 
 }
