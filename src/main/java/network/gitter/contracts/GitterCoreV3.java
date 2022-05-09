@@ -42,7 +42,7 @@ import io.neow3j.devpack.Contract;
 
 @SuppressWarnings("unchecked")
 @Permission(contract = "*", methods = "*")
-public class GitterCoreV2 {
+public class GitterCoreV3 {
 
     @DisplayName("JobCreated")
     private static Event5Args<ByteString, Hash160, String, Object[], Hash160> onJobCreated;
@@ -59,14 +59,13 @@ public class GitterCoreV2 {
     @DisplayName("Debug")
     private static Event1Arg<Object> onDebug;
 
-    private static final int MS_PER_MINUTE = 1000 * 60;
     private static final StorageContext ctx = getStorageContext();
 
     /* STORAGE MAPS */
     private static final StorageMap jobs = new StorageMap(ctx, toByteArray((byte) 2));
     private static final StorageMap timedJobs = new StorageMap(ctx, toByteArray((byte) 3));
-    private static final StorageMap paidFees = new StorageMap(ctx, toByteArray((byte) 4));
     private static final StorageMap names = new StorageMap(ctx, toByteArray((byte) 5));
+    private static final StorageMap timestamps = new StorageMap(ctx, toByteArray((byte) 11));
 
     /* STORAGE KEYS */
     private static final byte[] contractOwnerKey = toByteArray((byte) 6);
@@ -91,6 +90,16 @@ public class GitterCoreV2 {
     }
 
     @Safe
+    public static List<ByteString> jobs() {
+        Iterator<Struct<ByteString, ByteString>> iterator = jobs.find(FindOptions.RemovePrefix);
+        List<ByteString> jobs = new List<>();
+        while (iterator.next()) {
+            jobs.add(iterator.get().key);
+        }
+        return jobs;
+    }
+
+    @Safe
     public static List<Map<ByteString, JobVM>> jobsOf(Hash160 creator) {
         List<Map<ByteString, JobVM>> jobs = new List<>();
         Iterator<Struct<ByteString, ByteString>> iterator = new StorageMap(ctx, creator.toByteArray())
@@ -99,8 +108,12 @@ public class GitterCoreV2 {
             Struct<ByteString, ByteString> result = iterator.get();
             Job job = (Job) deserialize(result.value);
             ByteString jobId = getJobId(job);
+            ByteString timedJob = timedJobs.get(jobId);
+            Timer timer = timedJob != null ? (Timer) deserialize(timedJob) : null;
             JobVM jobVM = new JobVM(job.contract, job.method, job.creator, job.args, getNameForJob(jobId),
-                    getPaidFeesForJob(jobId));
+                    getFeesForJob(jobId), getExecutionsForJob(jobId), getTimestampForJob(jobId),
+                    timer != null ? timer.interval : 0,
+                    timer != null ? timer.nextExec : 0);
             Map<ByteString, JobVM> map = new Map<>();
             map.put(result.key, jobVM);
             jobs.add(map);
@@ -109,13 +122,49 @@ public class GitterCoreV2 {
     }
 
     @Safe
-    public static int getPaidFeesForJob(ByteString job) {
-        return paidFees.getIntOrZero(job);
+    public static int getTimestampForJob(ByteString job) {
+        return timestamps.getIntOrZero(job);
     }
 
     @Safe
     public static String getNameForJob(ByteString job) {
         return names.getString(job);
+    }
+
+    @Safe
+    public static List<Integer> getExecutionsForJob(ByteString jobId) {
+        List<Integer> timestamps = new List<>();
+        Iterator<Struct<ByteString, ByteString>> iterator = new StorageMap(ctx, jobId).find(FindOptions.RemovePrefix);
+        while (iterator.next()) {
+            int timestamp = iterator.get().key.toInt();
+            timestamps.add(timestamp);
+        }
+        return timestamps;
+    }
+
+    @Safe
+    public static List<Integer> getFeesForJob(ByteString jobId) {
+        List<Integer> paidFees = new List<>();
+        Iterator<ByteString> iterator = new StorageMap(ctx, jobId).find(FindOptions.ValuesOnly);
+        while (iterator.next()) {
+            int paidFee = iterator.get().toInt();
+            paidFees.add(paidFee);
+        }
+        return paidFees;
+    }
+
+    @Safe
+    public static JobVM getJob(ByteString jobId) {
+        Job job = (Job) deserialize(jobs.get(jobId));
+        ByteString timedJob = timedJobs.get(jobId);
+        Timer timer = timedJob != null ? (Timer) deserialize(timedJob) : null;
+        return new JobVM(job.contract, job.method, job.creator, job.args,
+                getNameForJob(jobId),
+                getFeesForJob(jobId),
+                getExecutionsForJob(jobId),
+                getTimestampForJob(jobId),
+                timer != null ? timer.interval : 0,
+                timer != null ? timer.nextExec : 0);
     }
 
     public static void createTimedJob(
@@ -129,7 +178,6 @@ public class GitterCoreV2 {
         assert (treasury() != null) : "noTreasurySet";
         assert (checkWitness(creator)) : "noAuth";
         ByteString job = createJob(contract, method, args, creator, name);
-        interval *= MS_PER_MINUTE;
         int nextExec = startTime > getTime() ? startTime : getTime();
         timedJobs.put(job, serialize(new Timer(nextExec, interval)));
         onTimerSet.fire(job, nextExec, interval);
@@ -144,11 +192,22 @@ public class GitterCoreV2 {
         Job job = new Job(contract, method, creator, args);
         ByteString jobId = getJobId(job);
         assert (jobs.get(jobId) == null) : "jobAlreadyExistsForCreator";
-        jobs.put(jobId, creator);
+        jobs.put(jobId, serialize(job));
         names.put(jobId, name);
+        timestamps.put(jobId, getTime());
         new StorageMap(ctx, creator.toByteArray()).put(jobId, serialize(job));
         onJobCreated.fire(jobId, contract, method, args, creator);
         return jobId;
+    }
+
+    public static void executeJob(
+            Hash160 contract,
+            String method,
+            Object[] args,
+            Hash160 creator,
+            Hash160 executor) {
+        ByteString job = getJobId(new Job(contract, method, creator, args));
+        executeJob(job, executor);
     }
 
     public static void executeJob(
@@ -167,31 +226,7 @@ public class GitterCoreV2 {
 
         new StorageMap(ctx, jobId).put(getTime(), feeToPay);
         payExecutionFee(job.creator, executor, feeToPay);
-        increasePaidFeeForJob(jobId, feeToPay);
         onExecution.fire(job.contract, executor, job.method, job.args, job.creator);
-    }
-
-    public static void executeJob(
-            Hash160 contract,
-            String method,
-            Object[] args,
-            Hash160 creator,
-            Hash160 executor) {
-        assert (treasury() != null) : "noTreasurySet";
-        int feeToPay = getTxCostsWithFee();
-        boolean enoughBalance = getTreasuryBalanceOf(creator) >= feeToPay;
-        assert (enoughBalance) : "creatorDoesNotHaveEnoughBalance";
-        ByteString job = getJobId(new Job(contract, method, creator, args));
-        onDebug.fire(job);
-        assert (jobs.get(job) != null) : "noSuchJobFound";
-        updateTimer(job);
-
-        Contract.call(contract, method, CallFlags.All, args);
-
-        new StorageMap(ctx, job).put(getTime(), feeToPay);
-        payExecutionFee(creator, executor, feeToPay);
-        increasePaidFeeForJob(job, feeToPay);
-        onExecution.fire(contract, executor, method, args, creator);
     }
 
     public static void cancelJob(ByteString jobId) {
@@ -228,11 +263,6 @@ public class GitterCoreV2 {
             timer.nextExec = nextExec;
             timedJobs.put(job, serialize(timer));
         }
-    }
-
-    private static void increasePaidFeeForJob(ByteString job, int fee) {
-        int current = paidFees.getIntOrZero(job);
-        paidFees.put(job, current + fee);
     }
 
     private static int getTxCosts() {

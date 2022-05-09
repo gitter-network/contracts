@@ -12,7 +12,7 @@ import io.neow3j.test.ContractTest;
 import io.neow3j.types.ContractParameter;
 
 @ContractTest(blockTime = 1, contracts = {
-                GitterTreasuryV3.class }, batchFile = "init.batch", configFile = "dev.neo-express")
+                GitterTreasuryV4.class }, batchFile = "init.batch", configFile = "dev.neo-express")
 public class TreasuryTest extends AbstractTest {
 
         private static final String GET_BALANCE = "getBalance";

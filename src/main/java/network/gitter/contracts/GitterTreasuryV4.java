@@ -28,7 +28,7 @@ import static io.neow3j.devpack.Runtime.checkWitness;
 @ManifestExtra(key = "name", value = "Gitter Treasury")
 @Permission(nativeContract = NativeContract.ContractManagement, methods = "update")
 @Permission(nativeContract = NativeContract.GasToken, methods = "transfer")
-public class GitterTreasuryV3 {
+public class GitterTreasuryV4 {
 
     @DisplayName("Payment")
     private static Event3Args<Hash160, Integer, Object> onPayment;

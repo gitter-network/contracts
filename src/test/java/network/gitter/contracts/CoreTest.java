@@ -18,8 +18,8 @@ import io.neow3j.types.CallFlags;
 import io.neow3j.types.ContractParameter;
 import network.gitter.contracts.examples.CounterExample;
 
-@ContractTest(blockTime = 1, contracts = { CounterExample.class, GitterCoreV2.class,
-                GitterTreasuryV3.class }, batchFile = "init.batch", configFile = "dev.neo-express")
+@ContractTest(blockTime = 1, contracts = { CounterExample.class, GitterCoreV3.class,
+                GitterTreasuryV4.class }, batchFile = "init.batch", configFile = "dev.neo-express")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class CoreTest extends AbstractTest {
 

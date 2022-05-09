@@ -45,13 +45,13 @@ public abstract class AbstractTest {
                 return config;
         }
 
-        @DeployConfig(GitterTreasuryV3.class)
+        @DeployConfig(GitterTreasuryV4.class)
         public static DeployConfiguration configureTreasury(DeployContext ctx) throws Exception {
                 DeployConfiguration config = new DeployConfiguration();
                 ContractParameter owner = ContractParameter
                                 .hash160(ext.getAccount("NQcSTBwSJs7hcFUZzku2QdPNLe2dkTGok2").getScriptHash());
                 ContractParameter core = ContractParameter
-                                .hash160(ctx.getDeployedContract(GitterCoreV2.class).getScriptHash());
+                                .hash160(ctx.getDeployedContract(GitterCoreV3.class).getScriptHash());
 
                 ContractParameter deployParams = ContractParameter
                                 .array(owner, core);
@@ -59,7 +59,7 @@ public abstract class AbstractTest {
                 return config;
         }
 
-        @DeployConfig(GitterCoreV2.class)
+        @DeployConfig(GitterCoreV3.class)
         public static DeployConfiguration configureCore() throws Exception {
                 DeployConfiguration config = new DeployConfiguration();
 
@@ -81,9 +81,9 @@ public abstract class AbstractTest {
 
                 counterExample = new SmartContract(ext.getDeployedContract(CounterExample.class).getScriptHash(),
                                 ext.getNeow3j());
-                treasury = new SmartContract(ext.getDeployedContract(GitterTreasuryV3.class).getScriptHash(),
+                treasury = new SmartContract(ext.getDeployedContract(GitterTreasuryV4.class).getScriptHash(),
                                 ext.getNeow3j());
-                core = new GitterCoreContract(ext.getDeployedContract(GitterCoreV2.class).getScriptHash(),
+                core = new GitterCoreContract(ext.getDeployedContract(GitterCoreV3.class).getScriptHash(),
                                 ext.getNeow3j());
 
                 // set treasury in core contract
